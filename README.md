@@ -1,7 +1,5 @@
 [![Build Status](https://travis-ci.org/domasx2/sequelize-fixtures.svg?branch=master)](https://travis-ci.org/domasx2/sequelize-fixtures)
 
-**I'm no longer using Sequelize or this lib, and have very little motivation to maintain it. If someone wants to take over, let me know!**
-
 Sequelize fixtures
 ==========================================
 
@@ -48,6 +46,14 @@ Tested with latest Sequelize (5.0)
 
     //specify file encoding (default utf8)
     sequelize_fixtures.loadFile('fixtures/*.json', models, { encoding: 'windows-1257'}).then(function(){
+        doStuffAfterLoad();
+    });
+
+    //specify logging function (default console.log)
+    function myLogging(defaultLog) {
+        console.log('Fixtures: processing ...')
+    }
+    sequelize_fixtures.loadFile('fixtures/*.json', models, { log: myLogging}).then(function(){
         doStuffAfterLoad();
     });
 
@@ -357,7 +363,7 @@ For each model you can provide build options that are passed to Model.build() an
 
 #### Detect duplicates based on select fields
 
-In case you want to detect duplicates based on specific field or fields rather than all fields (for example, don't include entities with the same id, even if other fields don't match), you can speficy these fields with a 'keys' property.
+In case you want to detect duplicates based on specific field or fields rather than all fields (for example, don't include entities with the same id, even if other fields don't match), you can specify these fields with a 'keys' property.
 
 ```json
 {
@@ -381,6 +387,52 @@ In case you want to detect duplicates based on specific field or fields rather t
 In this example only John will be loaded
 
 
+
+#### Ignore setters (`ignoreSet`)
+
+By default, this library attempts to run values through any defined property setters to coerce the value correctly.
+If you use instance methods (other than `setDataValue`, which a mock is created for), then this will raise an error.
+
+For example:
+
+```javascript
+const User = sequelize.define('User',
+  email: {
+    type: DataTypes.STRING,
+    unique: true,
+    validate: {
+      isEmail: true,
+    },
+    set: function set(val) {
+      if (this.previous('email')) { // <--- this line will raise an error
+        // check some thing
+      }
+      this.setDataValue('email', val);
+    }
+  }
+});
+```
+
+ You can turn off this behavior by setting `ignoreSet` to true.
+
+ ```json
+ {
+     "model": "User",
+     "ignoreSet": true,
+     "saveOptions": {
+         "fields": ["title", "body"]
+     },
+     "data": {
+         "title": "Any title",
+         "slug": "My Invalid Slug"
+     }
+ }
+ ```
+
+ This ignores any defined setters for this model and instead just set the value
+ as the same data literal specified in the fixture.
+
+
 # grunt task
 
 Gruntfile.js:
@@ -390,10 +442,12 @@ Gruntfile.js:
         fixtures: {
             import_test_data: {
                 src: ['fixtures/data1.json', 'fixtures/models*.json'],
-                models: function () {  //returns mapping model name: model
-                    return require('../models')
+                // supports async loading models
+                models: async function () {  
+                    return await loadModels();
                 },
-                options: { //specify encoding, optiona. default utf-8
+                options: {
+                    //specify encoding, optional default utf-8
                     encoding: 'windows-1257'
                 }
             }
